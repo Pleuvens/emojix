@@ -15,6 +15,10 @@ defmodule Emojix.Repo do
     GenServer.call(__MODULE__, {:find_by, {:shortcodes, shortcode}})
   end
 
+  def find_by_legacy_shortcode(shortcode) do
+    GenServer.call(__MODULE__, {:find_by, {:legacy_shortcodes, shortcode}})
+  end
+
   def find_by_hexcode(hexcode) do
     GenServer.call(__MODULE__, {:find_by, {:hexcodes, hexcode}})
   end

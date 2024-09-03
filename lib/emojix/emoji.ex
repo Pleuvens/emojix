@@ -6,6 +6,7 @@ defmodule Emojix.Emoji do
             hexcode: nil,
             description: nil,
             shortcodes: [],
+            legacy_shortcodes: [],
             tags: [],
             unicode: nil,
             variations: []
@@ -15,6 +16,7 @@ defmodule Emojix.Emoji do
           hexcode: String.t(),
           description: String.t(),
           shortcodes: [String.t()],
+          legacy_shortcodes: [String.t()],
           tags: [String.t()],
           unicode: String.t(),
           variations: [__MODULE__.t()]

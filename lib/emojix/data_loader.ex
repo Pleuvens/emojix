@@ -34,7 +34,10 @@ defmodule Emojix.DataLoader do
     json = Jason.decode!(download_file(@download_path), keys: :atoms)
     shortcodes = Jason.decode!(download_file(@download_shortcodes), keys: :strings)
 
-    create_table(json, shortcodes)
+    legacy_shortcodes =
+      Jason.decode!(download_file(@download_legacy_shortcodes), keys: :strings)
+
+    create_table(json, shortcodes, legacy_shortcodes)
   end
 
   defp download_file(path) do
@@ -49,19 +52,18 @@ defmodule Emojix.DataLoader do
     body
   end
 
-  defp merge_shortcodes(shortcodes, legacy_shortcodes) do
-    Map.merge(shortcodes, legacy_shortcodes, fn _k, v1, v2 ->
-      (List.wrap(v1 || []) ++ List.wrap(v2 || []))
-      |> Enum.uniq()
-    end)
-  end
-
-  defp create_table(json, json_shortcodes) do
+  defp create_table(json, shortcodes, legacy_shortcodes) do
     Logger.debug("Building emoji ets table")
     table = :ets.new(:emoji_table, [:named_table])
 
     emoji_list =
-      parse_json(json, json_shortcodes)
+      parse_json(json, shortcodes)
+      |> Enum.reduce([], fn e, acc ->
+        e.variations ++ [e | acc]
+      end)
+
+    legacy_emoji_list =
+      parse_json(json, legacy_shortcodes)
       |> Enum.reduce([], fn e, acc ->
         e.variations ++ [e | acc]
       end)
@@ -73,6 +75,14 @@ defmodule Emojix.DataLoader do
 
       for shortcode <- emoji.shortcodes do
         :ets.insert(table, {{:shortcodes, shortcode}, emoji.hexcode})
+      end
+    end
+
+    for emoji <- legacy_emoji_list do
+      :ets.insert(table, {{:hexcodes, emoji.hexcode}, emoji})
+
+      for shortcode <- emoji.legacy_shortcodes do
+        :ets.insert(table, {{:legacy_shortcodes, shortcode}, emoji.hexcode})
       end
     end
 
