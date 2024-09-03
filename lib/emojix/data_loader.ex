@@ -6,7 +6,7 @@ defmodule Emojix.DataLoader do
   require IEx
   alias Mint.HTTP
 
-  @emoji_version "15.2.0"
+  @emoji_version "15.3.1"
   @download_host "cdn.jsdelivr.net"
   @download_path "/npm/emojibase-data@#{@emoji_version}/en/compact.json"
   @download_shortcodes "/npm/emojibase-data@#{@emoji_version}/en/shortcodes/iamcal.json"
@@ -32,12 +32,7 @@ defmodule Emojix.DataLoader do
   def download_and_populate do
     Logger.debug("Downloading emoji dataset")
     json = Jason.decode!(download_file(@download_path), keys: :atoms)
-    json_shortcodes = Jason.decode!(download_file(@download_shortcodes), keys: :strings)
-
-    json_legacy_shortcodes =
-      Jason.decode!(download_file(@download_legacy_shortcodes), keys: :strings)
-
-    shortcodes = merge_shortcodes(json_shortcodes, json_legacy_shortcodes)
+    shortcodes = Jason.decode!(download_file(@download_shortcodes), keys: :strings)
 
     create_table(json, shortcodes)
   end
