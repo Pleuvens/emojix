@@ -63,7 +63,7 @@ defmodule Emojix.DataLoader do
       end)
 
     legacy_emoji_list =
-      parse_json(json, legacy_shortcodes)
+      parse_json(json, legacy_shortcodes, true)
       |> Enum.reduce([], fn e, acc ->
         e.variations ++ [e | acc]
       end)
@@ -79,7 +79,18 @@ defmodule Emojix.DataLoader do
     end
 
     for emoji <- legacy_emoji_list do
-      :ets.insert(table, {{:hexcodes, emoji.hexcode}, emoji})
+      key = {:hexcodes, emoji.hexcode}
+
+      data =
+        case :ets.lookup(table, key) do
+          [{^key, result}] -> result
+          _ -> emoji
+        end
+
+      :ets.insert(
+        table,
+        {{:hexcodes, emoji.hexcode}, %{data | legacy_shortcodes: emoji.legacy_shortcodes}}
+      )
 
       for shortcode <- emoji.legacy_shortcodes do
         :ets.insert(table, {{:legacy_shortcodes, shortcode}, emoji.hexcode})
@@ -91,26 +102,42 @@ defmodule Emojix.DataLoader do
     :emoji_table
   end
 
-  defp parse_json(json, json_shortcodes) do
+  defp parse_json(json, json_shortcodes, legacy? \\ false) do
     json
     |> Stream.filter(&Map.has_key?(&1, :order))
     |> Enum.reduce([], fn emoji, list ->
-      [build_emoji_struct(emoji, json_shortcodes) | list]
+      [build_emoji_struct(emoji, json_shortcodes, legacy?) | list]
     end)
   end
 
-  defp build_emoji_struct(emoji, json_shortcodes) do
+  defp build_emoji_struct(emoji, json_shortcodes, legacy?) do
     shortcodes = Map.get(json_shortcodes, emoji.hexcode, [])
 
-    %Emojix.Emoji{
-      id: emoji.order,
-      hexcode: emoji.hexcode,
-      description: emoji.label,
-      shortcodes: List.wrap(shortcodes),
-      unicode: emoji.unicode,
-      tags: Map.get(emoji, :tags, []),
-      variations: Map.get(emoji, :skins, []) |> Enum.map(&build_emoji_struct(&1, json_shortcodes))
-    }
+    if legacy? do
+      %Emojix.Emoji{
+        id: emoji.order,
+        hexcode: emoji.hexcode,
+        description: emoji.label,
+        legacy_shortcodes: List.wrap(shortcodes),
+        unicode: emoji.unicode,
+        tags: Map.get(emoji, :tags, []),
+        variations:
+          Map.get(emoji, :skins, [])
+          |> Enum.map(&build_emoji_struct(&1, json_shortcodes, legacy?))
+      }
+    else
+      %Emojix.Emoji{
+        id: emoji.order,
+        hexcode: emoji.hexcode,
+        description: emoji.label,
+        shortcodes: List.wrap(shortcodes),
+        unicode: emoji.unicode,
+        tags: Map.get(emoji, :tags, []),
+        variations:
+          Map.get(emoji, :skins, [])
+          |> Enum.map(&build_emoji_struct(&1, json_shortcodes, legacy?))
+      }
+    end
   end
 
   @spec table_exists? :: boolean

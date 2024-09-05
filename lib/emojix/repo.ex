@@ -71,7 +71,7 @@ defmodule Emojix.Repo do
     end
   end
 
-  defp search_by(table, field, value) when field in [:tags, :shortcodes] do
+  defp search_by(table, field, value) when field in [:tags, :shortcodes, :legacy_shortcodes] do
     select_all(table) |> Enum.filter(fn emoji -> Map.get(emoji, field) |> Enum.member?(value) end)
   end
 
