@@ -1,82 +1,70 @@
 defmodule Emojix.Repo do
   @moduledoc false
 
-  use GenServer
+  @external_resource Emojix.DataLoader.dataset_path()
+  @all Emojix.DataLoader.dataset_path() |> File.read!() |> Jason.decode!(keys: :atoms)
 
-  def start_link(_) do
-    GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
-  end
+  Enum.each(@all, fn emoji ->
+    Enum.each(emoji.shortcodes, fn shortcode ->
+      def find_by_shortcode(unquote(shortcode)) do
+        unquote(Macro.escape(emoji))
+        |> to_emojix_struct()
+      end
+    end)
+  end)
 
-  def all() do
-    GenServer.call(__MODULE__, :all)
-  end
+  def find_by_shortcode(_shortcode), do: nil
 
-  def find_by_shortcode(shortcode) do
-    GenServer.call(__MODULE__, {:find_by, {:shortcodes, shortcode}})
-  end
+  Enum.each(@all, fn emoji ->
+    Enum.each(emoji.legacy_shortcodes, fn shortcode ->
+      def find_by_legacy_shortcode(unquote(shortcode)) do
+        unquote(Macro.escape(emoji))
+        |> to_emojix_struct()
+      end
+    end)
+  end)
 
-  def find_by_legacy_shortcode(shortcode) do
-    GenServer.call(__MODULE__, {:find_by, {:legacy_shortcodes, shortcode}})
-  end
+  def find_by_legacy_shortcode(_shortcode), do: nil
 
-  def find_by_hexcode(hexcode) do
-    GenServer.call(__MODULE__, {:find_by, {:hexcodes, hexcode}})
-  end
+  Enum.each(@all, fn emoji ->
+    Enum.each([emoji.hexcode], fn hexcode ->
+      def find_by_hexcode(unquote(hexcode)) do
+        unquote(Macro.escape(emoji))
+        |> to_emojix_struct()
+      end
+    end)
+  end)
+
+  def find_by_hexcode(_hexcode), do: nil
+
+  def all, do: @all
 
   def search_by_description(description) do
-    GenServer.call(__MODULE__, {:search_by, {:description, description}})
+    search_by(:description, description)
   end
 
   def search_by_tag(tag) do
-    GenServer.call(__MODULE__, {:search_by, {:tags, tag}})
+    search_by(:tags, tag)
   end
 
-  # Callbacks
+  defp to_emojix_struct(nil), do: nil
+  defp to_emojix_struct(data) when is_map(data), do: struct(Emojix.Emoji, data)
 
-  def init(_) do
-    {:ok, Emojix.DataLoader.load_table()}
+  defp search_by(field, value) when field in [:tags, :shortcodes, :legacy_shortcodes] do
+    @all
+    |> Enum.filter(fn emoji ->
+      Map.get(emoji, field)
+      |> Enum.member?(value)
+    end)
+    |> Enum.map(&to_emojix_struct/1)
   end
 
-  def handle_call(:all, _from, table) do
-    {:reply, select_all(table), table}
-  end
-
-  def handle_call({:find_by, {:hexcodes, _hexcode} = value}, _from, table) do
-    {:reply, lookup(table, value), table}
-  end
-
-  def handle_call({:find_by, value}, _from, table) do
-    case lookup(table, value) do
-      hexcode when is_binary(hexcode) ->
-        {:reply, lookup(table, {:hexcodes, hexcode}), table}
-
-      nil ->
-        {:reply, nil, table}
-    end
-  end
-
-  def handle_call({:search_by, {field, value}}, _from, table) do
-    {:reply, search_by(table, field, value), table}
-  end
-
-  defp select_all(table) do
-    ms = [{{{:"$1", :_}, :"$2"}, [{:==, :"$1", :hexcodes}], [:"$2"]}]
-    :ets.select(table, ms)
-  end
-
-  defp lookup(table, key) do
-    case :ets.lookup(table, key) do
-      [{^key, result}] -> result
-      _ -> nil
-    end
-  end
-
-  defp search_by(table, field, value) when field in [:tags, :shortcodes, :legacy_shortcodes] do
-    select_all(table) |> Enum.filter(fn emoji -> Map.get(emoji, field) |> Enum.member?(value) end)
-  end
-
-  defp search_by(table, field, value) do
-    select_all(table)
-    |> Enum.filter(fn emoji -> Map.get(emoji, field) |> String.contains?(value) end)
+  defp search_by(field, value) do
+    @all
+    |> Enum.filter(fn emoji ->
+      Map.get(emoji, field)
+      |> String.contains?(value)
+    end)
+    |> Enum.map(&to_emojix_struct/1)
   end
 end

@@ -4,8 +4,7 @@ defmodule Emojix.App do
   use Application
 
   def start(_type, _args) do
-    children = [Emojix.Repo]
-
-    Supervisor.start_link(children, strategy: :one_for_one)
+    Emojix.DataLoader.load_table()
+    Supervisor.start_link([], strategy: :one_for_one)
   end
 end

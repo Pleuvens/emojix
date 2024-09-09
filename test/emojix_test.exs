@@ -2,10 +2,23 @@ defmodule EmojixTest do
   use ExUnit.Case
 
   test "list all the emojis" do
-    assert length(Emojix.all()) === 3664
+    assert length(Emojix.all()) === 3782
   end
 
   test "find emoji by shortcode" do
+    test_cases = [
+      %{shortcode: "grinning", expected: "grinning face"},
+      %{shortcode: "flag-au", expected: "flag: Australia"},
+      %{shortcode: "black_medium_small_square", expected: "black medium-small square"}
+    ]
+
+    Enum.each(test_cases, fn t ->
+      emoji = Emojix.find_by_shortcode(t.shortcode)
+      assert emoji.description === t.expected
+    end)
+  end
+
+  test "find emoji by legacy shortcode" do
     test_cases = [
       %{shortcode: "gleeful", expected: "grinning face"},
       %{shortcode: "flag_au", expected: "flag: Australia"},
@@ -13,7 +26,7 @@ defmodule EmojixTest do
     ]
 
     Enum.each(test_cases, fn t ->
-      emoji = Emojix.find_by_shortcode(t.shortcode)
+      emoji = Emojix.find_by_legacy_shortcode(t.shortcode)
       assert emoji.description === t.expected
     end)
   end

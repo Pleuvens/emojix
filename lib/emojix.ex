@@ -56,6 +56,28 @@ defmodule Emojix do
   end
 
   @doc """
+  Find a emoji by shortcode
+  ## Examples
+      iex> Emojix.find_by_legacy_shortcode("medium_small_black_square")
+      %Emojix.Emoji{
+        id: 4744,
+        hexcode: "25FE",
+        description: "black medium-small square",
+        shortcodes: ["black_medium_small_square"],
+        legacy_shortcodes: ["medium_small_black_square"],
+        tags: ["geometric", "square"],
+        unicode: "◾️",
+        variations: []
+        }
+      iex> Emojix.find_by_legacy_shortcode("non_valid")
+      nil
+  """
+  @spec find_by_legacy_shortcode(String.t()) :: Emojix.Emoji.t() | nil
+  def find_by_legacy_shortcode(shortcode) do
+    shortcode |> String.downcase() |> Repo.find_by_legacy_shortcode()
+  end
+
+  @doc """
   Find a emoji by unicode
   ## Examples
       iex> Emojix.find_by_unicode("😼")

@@ -11,25 +11,19 @@ defmodule Emojix.DataLoader do
   @download_path "/npm/emojibase-data@#{@emoji_version}/en/compact.json"
   @download_shortcodes "/npm/emojibase-data@#{@emoji_version}/en/shortcodes/iamcal.json"
   @download_legacy_shortcodes "/npm/emojibase-data@#{@emoji_version}/en/shortcodes/emojibase-legacy.json"
+  @dataset_file_name "dataset_#{@emoji_version}.json"
 
-  @spec ets_table_path :: Path
-  def ets_table_path do
-    Path.join(:code.priv_dir(:emojix), "dataset_#{@emoji_version}.ets")
+  def dataset_path do
+    Path.join(:code.priv_dir(:emojix), @dataset_file_name)
   end
 
-  @spec load_table :: :emoji_table
   def load_table do
-    if table_exists?() do
-      {:ok, _} = :ets.file2tab(String.to_charlist(ets_table_path()))
-
-      :emoji_table
-    else
+    if not dataset_exists?() do
       download_and_populate()
     end
   end
 
-  @spec download_and_populate :: :emoji_table
-  def download_and_populate do
+  defp download_and_populate do
     Logger.debug("Downloading emoji dataset")
     json = Jason.decode!(download_file(@download_path), keys: :atoms)
     shortcodes = Jason.decode!(download_file(@download_shortcodes), keys: :strings)
@@ -37,10 +31,10 @@ defmodule Emojix.DataLoader do
     legacy_shortcodes =
       Jason.decode!(download_file(@download_legacy_shortcodes), keys: :strings)
 
-    create_table(json, shortcodes, legacy_shortcodes)
+    create_dataset(json, shortcodes, legacy_shortcodes)
   end
 
-  defp download_file(path) do
+  defp download_file(path) when is_binary(path) do
     {:ok, conn} = HTTP.connect(:https, @download_host, 443)
 
     {:ok, conn, request_ref} =
@@ -52,9 +46,8 @@ defmodule Emojix.DataLoader do
     body
   end
 
-  defp create_table(json, shortcodes, legacy_shortcodes) do
-    Logger.debug("Building emoji ets table")
-    table = :ets.new(:emoji_table, [:named_table])
+  defp create_dataset(json, shortcodes, legacy_shortcodes) when is_map(json) and is_map(shortcodes) and is_map(legacy_shortcodes) do
+    Logger.debug("Building emoji dataset")
 
     emoji_list =
       parse_json(json, shortcodes)
@@ -68,41 +61,22 @@ defmodule Emojix.DataLoader do
         e.variations ++ [e | acc]
       end)
 
-    Logger.debug("Populating table with #{Enum.count(emoji_list)} emojis")
+    Logger.debug("Populating dataset with #{Enum.count(emoji_list)} emojis")
 
-    for emoji <- emoji_list do
-      :ets.insert(table, {{:hexcodes, emoji.hexcode}, emoji})
+    dataset = Enum.map(1..Enum.count(emoji_list), fn id ->
+      %Emojix.Emoji{
+        Enum.at(emoji_list, id - 1) |
+        legacy_shortcodes: Map.get(Enum.at(legacy_emoji_list, id - 1), :legacy_shortcodes, []),
+        variations: []
+      }
+      |> Map.from_struct()
+    end)
+    |> Jason.encode!()
 
-      for shortcode <- emoji.shortcodes do
-        :ets.insert(table, {{:shortcodes, shortcode}, emoji.hexcode})
-      end
-    end
-
-    for emoji <- legacy_emoji_list do
-      key = {:hexcodes, emoji.hexcode}
-
-      data =
-        case :ets.lookup(table, key) do
-          [{^key, result}] -> result
-          _ -> emoji
-        end
-
-      :ets.insert(
-        table,
-        {{:hexcodes, emoji.hexcode}, %{data | legacy_shortcodes: emoji.legacy_shortcodes}}
-      )
-
-      for shortcode <- emoji.legacy_shortcodes do
-        :ets.insert(table, {{:legacy_shortcodes, shortcode}, emoji.hexcode})
-      end
-    end
-
-    :ets.tab2file(:emoji_table, String.to_charlist(ets_table_path()))
-
-    :emoji_table
+    File.write(dataset_path(), dataset)
   end
 
-  defp parse_json(json, json_shortcodes, legacy? \\ false) do
+  defp parse_json(json, json_shortcodes, legacy? \\ false) when is_map(json) and is_map(json_shortcodes) do
     json
     |> Stream.filter(&Map.has_key?(&1, :order))
     |> Enum.reduce([], fn emoji, list ->
@@ -110,7 +84,7 @@ defmodule Emojix.DataLoader do
     end)
   end
 
-  defp build_emoji_struct(emoji, json_shortcodes, legacy?) do
+  defp build_emoji_struct(emoji, json_shortcodes, legacy?) when is_map(emoji) and is_map(json_shortcodes) do
     shortcodes = Map.get(json_shortcodes, emoji.hexcode, [])
 
     if legacy? do
@@ -140,9 +114,8 @@ defmodule Emojix.DataLoader do
     end
   end
 
-  @spec table_exists? :: boolean
-  defp table_exists? do
-    File.exists?(ets_table_path())
+  defp dataset_exists? do
+    File.exists?(dataset_path())
   end
 
   defp stream_request(conn, request_ref, body \\ []) do
